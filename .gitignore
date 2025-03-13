@@ -1,0 +1,53 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Temporary files created by dlv during debugging
+__debug_bin*
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Exclude sqlite db file
+*.sqlite
+*.sqlite3
+*.db
+*.sqlite-journal
+
+dist/
+
+# Go modules
+vendor/
+
+# Go test binary, build with `go test -c`
+*.test
+
+# Should Exists
+!.vscode/config-schema.json
+!.vscode/launch.json
+
+# IDE and editor files
+.idea/
+.vscode/settings.json
+*.swp
+
+# Logs
+*.log
+
+# Dependency directories
+vendor/
+Godeps/
+
+# Temp Test Files
+.local
+
+# Build directories
+bin/
+build/
+
+# Exclude Env Files
+config.yml
+config.prod.yml
