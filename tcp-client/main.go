@@ -1,43 +1,47 @@
 package main
 
 import (
-	"encoding/binary"
+	"context"
+	"encoding/json"
 	"fmt"
-	"net"
+	"log"
+	"msg-protocol/protocol"
+	"sync"
+	"tcp-client/client"
+	"time"
+
+	"github.com/google/uuid"
 )
 
-func sendTLV(conn net.Conn, msgType byte, payload string) error {
-	data := []byte(payload)
-	length := uint16(len(data) + 1)
-
-	// 组装数据包
-	packet := make([]byte, 2+1+len(data))
-	binary.BigEndian.PutUint16(packet[:2], length)
-	packet[2] = msgType
-	copy(packet[3:], data)
-
-	// 发送数据
-	_, err := conn.Write(packet)
-	return err
-}
-
 func main() {
-	conn, err := net.Dial("tcp", "localhost:9000")
+	var wg sync.WaitGroup
+	wg.Add(1)
+	c, err := client.NewClient(context.TODO(), "localhost:9000")
 	if err != nil {
-		fmt.Println("Connection error:", err)
-		return
-	}
-	defer conn.Close()
-
-	// 发送消息
-	err = sendTLV(conn, 1, "Hello, Server!")
-	if err != nil {
-		fmt.Println("Send error:", err)
-		return
+		log.Fatal(err)
 	}
 
-	// 接收响应
-	buf := make([]byte, 1024)
-	n, _ := conn.Read(buf)
-	fmt.Println("Response:", string(buf[:n]))
+	c.SetOnMessageReceive(func(msg *protocol.ProtocolMessage) {
+		s, _ := json.MarshalIndent(msg, "", "  ")
+		fmt.Printf("client receive server message: %s\n\n", s)
+	})
+
+	go func() {
+		if err := c.Serve(func() {
+			wg.Done()
+		}); err != nil {
+			log.Fatal(err)
+		}
+	}()
+	wg.Wait()
+
+	for {
+		c.SendMessage(context.TODO(), &protocol.ProtocolMessage{
+			Version:     1,
+			Flags:       1,
+			MessageType: 1,
+			BodyPayload: ([]byte)(uuid.NewString()),
+		})
+		time.Sleep(time.Second * 1)
+	}
 }

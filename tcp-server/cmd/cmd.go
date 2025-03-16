@@ -2,48 +2,61 @@ package cmd
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	"log"
+	"msg-protocol/codec"
+	"sync"
 
 	"github.com/cloudwego/netpoll"
 )
 
-// 解析 TLV 数据
-func parseTLV(reader netpoll.Reader) (byte, []byte, error) {
-	// 读取长度字段(前两个字节表示数据的长度)
-	lengthBuf, err := reader.Peek(2)
-	if err != nil {
-		return 0, nil, err
-	}
-	// 表示数据长度
-	length := binary.BigEndian.Uint16(lengthBuf)
-	// 读取完整数据
-	data, err := reader.ReadBinary(int(length))
-	if err != nil {
-		return 0, nil, err
-	}
-
-	// 解析 Type 和 Payload
-	msgType := data[0]
-	payload := data[1:]
-
-	return msgType, payload, nil
-}
+var (
+	mutex       sync.RWMutex
+	codecBufMap = make(map[netpoll.Connection]*codec.Codec)
+)
 
 func handleConnection(ctx context.Context, conn netpoll.Connection) error {
 	reader := conn.Reader()
-	defer conn.Close()
-	for {
-		msgType, payload, err := parseTLV(reader)
-		if err != nil {
-			log.Println("Read error:", err)
-			return err
-		}
-		fmt.Printf("Received: Type=%d, Payload=%s\n", msgType, string(payload))
-		// 回写响应
-		conn.Write([]byte("ACK"))
+	writer := conn.Writer()
+	defer reader.Release()
+	mutex.RLock()
+	defer mutex.RUnlock()
+
+	c, ok := codecBufMap[conn]
+	if !ok {
+		return fmt.Errorf("not codec setup")
 	}
+
+	bf, err := reader.ReadBinary(reader.Len())
+	if err != nil {
+		c.Reset()
+		return err
+	}
+
+	if err := c.WriteBytes(bf); err != nil {
+		return err
+	}
+
+	msg, done, err := c.Decode()
+	if err != nil {
+		return err
+	}
+	// 数据还未读取完成
+	if !done {
+		return nil
+	}
+
+	// 数据已经处理完成
+	fmt.Println("server receive message", msg)
+	out, _ := c.Encode(msg)
+	if _, err := writer.WriteBinary(out); err != nil {
+		return err
+	}
+	if writeErr := writer.Flush(); writeErr != nil {
+		return writeErr
+	}
+
+	return nil
 }
 
 func startServer() {
@@ -60,11 +73,18 @@ func startServer() {
 		// 当客户端建立连接
 		netpoll.WithOnConnect(func(ctx context.Context, connection netpoll.Connection) context.Context {
 			fmt.Println("client connect request: ", connection.RemoteAddr())
+			mutex.Lock()
+			defer mutex.Unlock()
+			codecBufMap[connection] = &codec.Codec{}
 			return ctx
 		}),
 		// 客户端连接断开
 		netpoll.WithOnDisconnect(func(ctx context.Context, connection netpoll.Connection) {
 			fmt.Printf("remote client close: %s\n", connection.RemoteAddr())
+			mutex.Lock()
+			defer mutex.Unlock()
+			// 清理连接资源
+			delete(codecBufMap, connection)
 		}),
 	)
 	if err != nil {
