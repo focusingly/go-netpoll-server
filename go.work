@@ -1,6 +1,8 @@
 go 1.24.0
 
 use (
+	./go-netty-server
+	./msg-protocol
 	./tcp-client
 	./tcp-server
 )
