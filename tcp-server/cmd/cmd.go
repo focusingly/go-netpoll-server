@@ -27,7 +27,9 @@ func handleConnection(ctx context.Context, conn netpoll.Connection) error {
 		return fmt.Errorf("not codec setup")
 	}
 
-	bf, err := reader.ReadBinary(reader.Len())
+	l := reader.Len()
+	fmt.Println("--------------> ", l)
+	bf, err := reader.ReadBinary(l)
 	if err != nil {
 		c.Reset()
 		return err

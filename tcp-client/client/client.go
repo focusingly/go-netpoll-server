@@ -167,7 +167,7 @@ func createConn(dialer netpoll.Dialer, addr string, maxRetry int, delay time.Dur
 	return conn, connErr
 }
 
-func (c *Client) Serve(onEstablish ...func()) error {
+func (c *Client) Spin(onEstablish ...func()) error {
 	fnLen := len(onEstablish)
 	switch fnLen {
 	case 0:
