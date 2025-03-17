@@ -1,6 +1,7 @@
 go 1.24.0
 
 use (
+	./byte-operation
 	./go-netty-server
 	./msg-protocol
 	./tcp-client
